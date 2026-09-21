@@ -1,0 +1,159 @@
+"""Export helpers: CSV, Excel (openpyxl), PDF (reportlab)."""
+from __future__ import annotations
+
+import csv
+import io
+
+from openpyxl import Workbook
+
+
+def _cat_rows(category: list[dict], extras: bool = False) -> list[list[object]]:
+    rows = [["Key", "Count"] + (["Extra"] if extras else [])]
+    for item in category:
+        if extras and item.get("extra"):
+            rows.append([item["label"], item["count"], item["extra"]])
+        else:
+            rows.append([item["label"], item["count"]])
+    return rows
+
+
+def _recent_rows(files: list[dict]) -> list[list[object]]:
+    rows = [["Name", "Extension", "Size (bytes)", "Path", "Modified", "Modified By"]]
+    for f in files:
+        rows.append([
+            f.get("name", ""), f.get("extension") or "",
+            f.get("size") or 0, f.get("path") or "",
+            _iso(f.get("modified_time")), f.get("modified_by_name") or "",
+        ])
+    return rows
+
+
+def _iso(v) -> str:
+    return v.isoformat() if v else ""
+
+
+def _activity_rows(activity: list[dict]) -> list[list[object]]:
+    rows = [["Date", "User", "Action", "Folder", "Count"]]
+    for item in activity:
+        rows.append([item["label"], item.get("extra") or "", item["key"], "", item["count"]])
+    return rows
+
+
+def _overview_rows(overview: dict) -> list[list[object]]:
+    rows = [["Metric", "Value"]]
+    mapping = {
+        "total_files": "Total files",
+        "total_folders": "Total folders",
+        "new_files": "New files",
+        "modified_files": "Modified files",
+        "trashed_files": "Trashed files",
+        "total_activities": "Total activities",
+        "active_users": "Active users",
+        "total_size": "Total size (bytes)",
+    }
+    for key, label in mapping.items():
+        rows.append([label, overview.get(key, 0)])
+    return rows
+
+
+# --------------------------------------------------------------------------
+# CSV
+# --------------------------------------------------------------------------
+
+def _csv_section(buf: io.StringIO, title: str, rows: list[list[object]]) -> None:
+    writer = csv.writer(buf)
+    writer.writerow([])
+    writer.writerow([title])
+    writer.writerows(rows)
+
+
+def export_csv(report: dict) -> bytes:
+    buf = io.StringIO()
+    _csv_section(buf, "Project Report — Overview", _overview_rows(report["overview"]))
+    _csv_section(buf, "Activities by Day", _cat_rows(report["activity"]["by_day"]))
+    _csv_section(buf, "Activities by Action", _cat_rows(report["activity"]["by_action"]))
+    _csv_section(buf, "Activities by User", _cat_rows(report["activity"]["by_user"]))
+    _csv_section(buf, "Activities by Folder", _cat_rows(report["activity"]["by_folder"]))
+    _csv_section(buf, "Files by Extension", _cat_rows(report["files"]["by_extension"]))
+    _csv_section(buf, "Files by Folder", _cat_rows(report["files"]["by_folder"]))
+    _csv_section(buf, "Recent Files", _recent_rows(report["files"]["recent_files"]))
+    return buf.getvalue().encode("utf-8-sig")
+
+
+# --------------------------------------------------------------------------
+# Excel
+# --------------------------------------------------------------------------
+
+def export_xlsx(report: dict) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Overview"
+    for row in _overview_rows(report["overview"]):
+        ws.append(row)
+
+    sections = {
+        "Activities by Day": _cat_rows(report["activity"]["by_day"]),
+        "Activities by Action": _cat_rows(report["activity"]["by_action"]),
+        "Activities by User": _cat_rows(report["activity"]["by_user"]),
+        "Activities by Folder": _cat_rows(report["activity"]["by_folder"]),
+        "Files by Extension": _cat_rows(report["files"]["by_extension"]),
+        "Files by Folder": _cat_rows(report["files"]["by_folder"]),
+        "Recent Files": _recent_rows(report["files"]["recent_files"]),
+    }
+    for title, rows in sections.items():
+        sheet = wb.create_sheet(title[:31])
+        for row in rows:
+            sheet.append(row)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# --------------------------------------------------------------------------
+# PDF
+# --------------------------------------------------------------------------
+
+def export_pdf(report: dict, project_name: str) -> bytes:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (SimpleDocTemplate, Spacer, Table,
+                                    TableStyle, Paragraph)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            rightMargin=10 * mm, leftMargin=10 * mm,
+                            topMargin=12 * mm, bottomMargin=12 * mm)
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph(f"Project Report — {project_name}", styles["Title"]),
+        Paragraph("Automatically generated by DriveDoc Control", styles["Normal"]),
+        Spacer(1, 4 * mm),
+    ]
+
+    def add_table(title: str, rows: list[list[object]]) -> None:
+        data = [[str(c) for c in row] for row in rows]
+        table = Table(data, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f6feb")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f6fc")]),
+        ]))
+        story.append(Paragraph(title, styles["Heading2"]))
+        story.append(table)
+        story.append(Spacer(1, 4 * mm))
+
+    add_table("Overview", _overview_rows(report["overview"]))
+    add_table("Activities by Day", _cat_rows(report["activity"]["by_day"]))
+    add_table("Activities by Action", _cat_rows(report["activity"]["by_action"]))
+    add_table("Activities by User", _cat_rows(report["activity"]["by_user"]))
+    add_table("Activities by Folder", _cat_rows(report["activity"]["by_folder"]))
+    add_table("Files by Extension", _cat_rows(report["files"]["by_extension"]))
+    add_table("Files by Folder", _cat_rows(report["files"]["by_folder"]))
+    add_table("Recent Files", _recent_rows(report["files"]["recent_files"]))
+
+    doc.build(story)
+    return buf.getvalue()

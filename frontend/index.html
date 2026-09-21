@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DriveDoc Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230a84ff'/%3E%3Cpath d='M7 16.5 10 6l3.5 10.5H18L12 4 6 16.5z' fill='%23fff'/%3E%3C/svg%3E">
+</head>
+<body>
+  <div id="shell" class="shell">
+    <aside id="sidebar" class="sidebar hidden" hidden>
+      <div class="brand">
+        <div class="brand-mark">D</div>
+        <div class="brand-text">
+          <strong>DriveDoc</strong>
+          <span>Control</span>
+        </div>
+      </div>
+      <nav id="nav" class="nav"></nav>
+      <div class="sidebar-footer">
+        <div id="me-badge" class="me-badge"></div>
+      </div>
+    </aside>
+    <div class="main-col">
+      <header id="topbar" class="topbar hidden" hidden>
+        <div class="topbar-left">
+          <button id="sidebar-toggle" class="icon-btn" title="Toggle sidebar" aria-label="Toggle sidebar">
+            <svg viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <div id="crumb" class="crumb"></div>
+        </div>
+        <div class="topbar-right">
+          <button id="global-search-btn" class="icon-btn" title="Global search (Ctrl K)" aria-label="Global search">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <a id="notif-link" href="#/notifications" class="icon-btn with-badge" title="Notifications">
+            <svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6v4.3l-1.7 2.4A1 1 0 0 0 5 17h14a1 1 0 0 0 .7-1.3L18 13.3V9a6 6 0 0 0-6-6M10 19a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span id="notif-badge" class="badge hidden">0</span>
+          </a>
+          <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme"></button>
+        </div>
+      </header>
+      <main id="view" class="view"></main>
+    </div>
+  </div>
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

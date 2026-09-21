@@ -1,0 +1,21 @@
+# Render Blueprint — رفع دائم 24/7 بدون الاعتماد على جهازك
+# الاستخدام:
+#   1) حرّر الأكواد محليًا ثم ارفع المجلد إلى مستودع GitHub عام
+#   2) على Render.com: New -> Blueprint -> اختر المستودع
+#      وسيكتشف تلقائيًا هذا الملف render.yaml وينشئ الخدمة + النطاق
+# النتيجة: رابط ثابت https://<yourapp>.onrender.com يعمل من أي مكان
+services:
+  - type: web
+    name: drive-doc-control
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "8000"

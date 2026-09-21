@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html><body>
+<div id="out">init</div>
+<script type="module">
+  import { el } from "/js/ui.js";
+  import { state } from "/js/state.js";
+  document.getElementById("out").textContent = "mod:" + el("x").tagName + ":" + (typeof state);
+</script>
+</body></html>
