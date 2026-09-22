@@ -9,6 +9,7 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 import httpx
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from ...config import settings
@@ -19,10 +20,10 @@ from ...security import decrypt_secret, encrypt_secret
 OAUTH_SCOPES = settings.GOOGLE_SCOPES
 
 
-def build_authorization_url(state: str) -> str:
+def build_authorization_url(state: str, redirect_uri: str | None = None) -> str:
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
-        "redirect_uri": settings.OAUTH_REDIRECT_URI,
+        "redirect_uri": redirect_uri or settings.OAUTH_REDIRECT_URI,
         "response_type": "code",
         "scope": OAUTH_SCOPES,
         "access_type": "offline",
@@ -33,7 +34,7 @@ def build_authorization_url(state: str) -> str:
     return f"{settings.OAUTH_AUTH_URI}?{urllib.parse.urlencode(params)}"
 
 
-def exchange_code(code: str) -> dict:
+def exchange_code(code: str, redirect_uri: str | None = None) -> dict:
     """Swap the authorization code for tokens."""
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise AppError("Google OAuth is not configured. See GOOGLE_OAUTH_SETUP.md.",
@@ -45,7 +46,7 @@ def exchange_code(code: str) -> dict:
                 "code": code,
                 "client_id": settings.GOOGLE_CLIENT_ID,
                 "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "redirect_uri": settings.OAUTH_REDIRECT_URI,
+                "redirect_uri": redirect_uri or settings.OAUTH_REDIRECT_URI,
                 "grant_type": "authorization_code",
             },
             timeout=30,
@@ -145,9 +146,9 @@ def get_valid_access_token(db: Session, user: User) -> str:
         raise AuthError("Stored Google token cannot be decrypted.")
 
 
-def complete_login(db: Session, code: str) -> User:
+def complete_login(db: Session, code: str, redirect_uri: str | None = None) -> User:
     """End-to-end: code -> tokens -> userinfo -> upsert user + accounts/tokens."""
-    token_data = exchange_code(code)
+    token_data = exchange_code(code, redirect_uri=redirect_uri)
     access_token = token_data.get("access_token")
     if not access_token:
         raise AuthError("Google did not return an access token.")
@@ -158,8 +159,24 @@ def complete_login(db: Session, code: str) -> User:
     if not sub or not email:
         raise AuthError("Google profile is missing identity fields.")
 
+    # The authorization code can only be exchanged once, so the network work is
+    # done above and only the DB persistence is retried below. Under heavy
+    # monitoring the SQLite writer can briefly be busy ("database is locked").
+    for attempt in range(5):
+        try:
+            return _persist_login(db, token_data, info, sub, email, access_token)
+        except OperationalError as exc:
+            if "database is locked" not in str(exc):
+                raise
+            time.sleep(0.4 * (attempt + 1))
+            db.rollback()
+    raise OperationalError("login write failed: database stayed locked", None, None)
+
+
+def _persist_login(
+    db: Session, token_data: dict, info: dict, sub: str, email: str, access_token: str
+) -> User:
     user = db.query(User).filter(User.google_sub == sub).first()
-    created = False
     if user is None:
         user = db.query(User).filter(User.email == email).first()
     if user is None:
@@ -173,7 +190,6 @@ def complete_login(db: Session, code: str) -> User:
         )
         db.add(user)
         db.flush()
-        created = True
     else:
         user.google_sub = sub
         user.name = info.get("name") or user.name

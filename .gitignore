@@ -16,6 +16,9 @@ backend/data/
 *.db-shm
 .env
 
+# HF deploy token (never commit)
+hf-token.txt
+
 # OS / editor
 .DS_Store
 Thumbs.db

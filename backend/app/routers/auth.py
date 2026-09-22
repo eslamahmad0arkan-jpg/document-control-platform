@@ -19,11 +19,21 @@ from ..services.notification_service import unread_count
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+def _callback_uri(request: Request) -> str:
+    """Public callback URI derived from the request's Host header so Google OAuth
+    works from any tunnel / domain. localhost stays plain http; everything else
+    https (matching how the browser reached us)."""
+    host = (request.headers.get("host") or "localhost:8000").strip()
+    scheme = "http" if host.lower().startswith(("localhost", "127.")) else "https"
+    return f"{scheme}://{host}/api/auth/callback"
+
+
 @router.get("/login", response_model=LoginUrlResponse)
 def login(request: Request):
     state = oauth.new_state_token()
+    redirect_uri = _callback_uri(request)
     response = JSONResponse(
-        content={"url": oauth.build_authorization_url(state)}
+        content={"url": oauth.build_authorization_url(state, redirect_uri=redirect_uri)}
     )
     response.set_cookie(
         "oauth_state",
@@ -42,7 +52,7 @@ def callback(code: str, state: str, request: Request, db: Session = Depends(get_
     cookie_state = request.cookies.get("oauth_state")
     if not cookie_state or cookie_state != state:
         raise AuthError("OAuth state mismatch — please try again.")
-    user = oauth.complete_login(db, code)
+    user = oauth.complete_login(db, code, redirect_uri=_callback_uri(request))
     token = create_session_token(user.id, user.google_sub, user.role)
     response = Response(status_code=302)
     response.headers["Location"] = "/"

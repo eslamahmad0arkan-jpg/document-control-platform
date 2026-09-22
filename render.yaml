@@ -4,6 +4,12 @@
 #   2) على Render.com: New -> Blueprint -> اختر المستودع
 #      وسيكتشف تلقائيًا هذا الملف render.yaml وينشئ الخدمة + النطاق
 # النتيجة: رابط ثابت https://<yourapp>.onrender.com يعمل من أي مكان
+#
+# بعد أول Deploy (مهم):
+#   Service -> Environment -> أضف المتغيرات التالية ثم Save + Deploy:
+#   APP_ENV=production (مضبوط) و GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / SECRET_KEY
+#   و OAUTH_REDIRECT_URI=https://<رابطك>.onrender.com/api/auth/callback
+#   (القيم جاهزة في ملف .env المحلي — لا نكتبها هنا لأن المستودع عام)
 services:
   - type: web
     name: drive-doc-control
@@ -15,7 +21,3 @@ services:
     envVars:
       - key: APP_ENV
         value: production
-      - key: HOST
-        value: 0.0.0.0
-      - key: PORT
-        value: "8000"
